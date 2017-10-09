@@ -92,7 +92,7 @@ public class StreamingParser: HTTPResponseWriter {
     /// Class that wraps the CHTTPParser and calls the `HTTPRequestHandler` to get the response
     ///
     /// - Parameter handler: function that is used to create the response
-    public init(handler: @escaping HTTPRequestHandler, connectionCounter: CurrentConnectionCounting? = nil, keepAliveTimeout: Double = 60.0) {
+    public init(handler: @escaping HTTPRequestHandler, connectionCounter: CurrentConnectionCounting? = nil, keepAliveTimeout: Double = 30.0) {
         self.handle = handler
         self.connectionCounter = connectionCounter
         self.keepAliveTimeout = keepAliveTimeout
