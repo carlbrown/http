@@ -266,7 +266,7 @@ public class PoCSocketConnectionListener: ParserConnecting {
                     strongSelf.readerSource?.cancel()
                 }
                 if length < 0 {
-                    print("ReaderSource Read count negative on socket \(strongSocket.socketfd). Closing.")
+                    print("ReaderSource Read count negative (\(length)) on socket \(strongSocket.socketfd). Closing. ShouldClose \(strongSelf.shouldShutdown), ResponseComplete \(strongSelf.responseCompleted), WriteInProgress \(strongSelf.writeInProgress), Errno \(errno)")
                     strongSelf.errorOccurred = true
                     strongSelf.readerSource?.cancel()
                     strongSelf.close()
