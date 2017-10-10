@@ -262,9 +262,11 @@ public class PoCSocketConnectionListener: ParserConnecting {
                 strongSelf.close()
             }
             if length == 0 {
+                print("ReaderSource Read count zero. Cancelling.")
                 strongSelf.readerSource?.cancel()
             }
             if length < 0 {
+                print("ReaderSource Read count negative. Closing.")
                 strongSelf.errorOccurred = true
                 strongSelf.readerSource?.cancel()
                 strongSelf.close()
@@ -301,16 +303,24 @@ public class PoCSocketConnectionListener: ParserConnecting {
 
             while written < data.count && !errorOccurred {
                 try data.withUnsafeBytes { (ptr: UnsafePointer<UInt8>) in
-                    let result = try socket?.socketWrite(from: ptr + offset, bufSize:
-                        data.count - offset) ?? -1
-                    if result < 0 {
-                        print("Received broken write socket indication")
-                        errorOccurred = true
+                    if let strongSocket = socket {
+                        let result = try strongSocket.socketWrite(from: ptr + offset, bufSize:
+                            data.count - offset)
+                        if result < 0 {
+                            print("Received broken write socket indication")
+                            errorOccurred = true
+                        } else {
+                            written += result
+                        }
                     } else {
-                        written += result
+                        print("Socket unexpectedly nil during write")
+                        errorOccurred = true
                     }
                 }
                 offset = data.count - written
+                if (offset > 0) {
+                    print("Socket write left remainder. Retrying \(offset) bytes")
+                }
             }
             if errorOccurred {
                 close()
