@@ -30,6 +30,9 @@ internal class PoCSocket {
     /// The TCP port the server is actually listening on. Set after system call completes
     internal var listeningPort: Int32 = -1
     
+    /// The TCP port the client accepted the connection on. Set after system call completes
+    internal var remoteAcceptedPort: Int32 = -1
+
     /// Track state between `listen(2)` and `shutdown(2)`
     internal private(set) var isListening = false
     
@@ -142,9 +145,10 @@ internal class PoCSocket {
         var maxRetryCount = 100
         
         var acceptFD: Int32 = -1
+        var acceptAddr = sockaddr_in()
+        var addrSize = socklen_t(MemoryLayout<sockaddr_in>.size)
+
         repeat {
-            var acceptAddr = sockaddr_in()
-            var addrSize = socklen_t(MemoryLayout<sockaddr_in>.size)
             
             acceptFD = withUnsafeMutablePointer(to: &acceptAddr) { pointer in
                 return accept(self.socketfd, UnsafeMutableRawPointer(pointer).assumingMemoryBound(to: sockaddr.self), &addrSize)
@@ -166,6 +170,11 @@ internal class PoCSocket {
         
         retVal.isConnected = true
         retVal.socketfd = acceptFD
+        #if os(Linux)
+            retVal.remoteAcceptedPort = ntohs(acceptAddr.sin_port)
+        #else
+            retVal.remoteAcceptedPort = Int32((Int(OSHostByteOrder()) != OSLittleEndian ? UInt16(acceptAddr.sin_port) : _OSSwapInt16(UInt16(acceptAddr.sin_port))))
+        #endif
         
         return retVal
     }

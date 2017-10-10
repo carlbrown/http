@@ -287,11 +287,11 @@ public class PoCSocketConnectionListener: ParserConnecting {
                     strongSelf.close()
                 }
                 if length == 0 {
-                    print("ReaderSource Read count zero on socket \(strongSocket.socketfd). Cancelling.")
+                    print("ReaderSource Read count zero on socket \(strongSocket.socketfd). Cancelling. Remote Port \(strongSocket.remoteAcceptedPort).")
                     strongSelf.readerSource?.cancel()
                 }
                 if length < 0 {
-                    print("ReaderSource Read count negative (\(length)) on socket \(strongSocket.socketfd). Closing. ShouldClose \(strongSelf.shouldShutdown), ResponseComplete \(strongSelf.responseCompleted), WriteInProgress \(strongSelf.writeInProgress), Errno \(errno)")
+                    print("ReaderSource Read count negative (\(length)) on socket \(strongSocket.socketfd). Closing. Remote Port \(strongSocket.remoteAcceptedPort). ShouldClose \(strongSelf.shouldShutdown), ResponseComplete \(strongSelf.responseCompleted), WriteInProgress \(strongSelf.writeInProgress), Errno \(errno)")
                     strongSelf.errorOccurred = true
                     strongSelf.readerSource?.cancel()
                     strongSelf.close()
@@ -345,11 +345,11 @@ public class PoCSocketConnectionListener: ParserConnecting {
                         let result = try strongSocket.socketWrite(from: ptr + offset, bufSize:
                             data.count - offset)
                         if result < 0 {
-                            print("Received broken write socket \(strongSocket.socketfd) indication")
+                            print("Received broken write socket \(strongSocket.socketfd) indication. Remote Port \(strongSocket.remoteAcceptedPort).")
                             errorOccurred = true
                         } else {
                             if offset > 0 {
-                                print("Socket \(strongSocket.socketfd) wrote \(result) bytes of remainder.")
+                                print("Socket \(strongSocket.socketfd) wrote \(result) bytes of remainder. Remote Port \(strongSocket.remoteAcceptedPort).")
                             }
                             written += result
                         }
@@ -357,9 +357,9 @@ public class PoCSocketConnectionListener: ParserConnecting {
                     offset = data.count - written
                     if offset > 0 {
                         if errorOccurred {
-                            print("Socket \(strongSocket.socketfd) write left remainder. Error preventing retry of \(offset) bytes")
+                            print("Socket \(strongSocket.socketfd) write left remainder. Error preventing retry of \(offset) bytes. Remote Port \(strongSocket.remoteAcceptedPort).")
                         } else {
-                            print("Socket \(strongSocket.socketfd) write left remainder. Retrying \(offset) bytes")
+                            print("Socket \(strongSocket.socketfd) write left remainder. Retrying \(offset) bytes. Remote Port \(strongSocket.remoteAcceptedPort).")
                         }
                     }
                 } else {
