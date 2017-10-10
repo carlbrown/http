@@ -323,8 +323,12 @@ public class PoCSocketConnectionListener: ParserConnecting {
                         }
                     }
                     offset = data.count - written
-                    if (offset > 0) {
-                        print("Socket \(strongSocket.socketfd) write left remainder. Retrying \(offset) bytes")
+                    if offset > 0 {
+                        if errorOccurred {
+                            print("Socket \(strongSocket.socketfd) write left remainder. Error preventing retry of \(offset) bytes")
+                        } else {
+                            print("Socket \(strongSocket.socketfd) write left remainder. Retrying \(offset) bytes")
+                        }
                     }
                 } else {
                     print("Socket unexpectedly nil during write")
