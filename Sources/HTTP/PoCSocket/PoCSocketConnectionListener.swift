@@ -69,6 +69,26 @@ public class PoCSocketConnectionListener: ParserConnecting {
         }
     }
     
+    ///Flag to track whether we're in the middle of a write or not (with lock)
+    private let _writeInProgressLock = DispatchSemaphore(value: 1)
+    private var _writeInProgress: Bool = false
+    var writeInProgress: Bool {
+        get {
+            _writeInProgressLock.wait()
+            defer {
+                _writeInProgressLock.signal()
+            }
+            return _writeInProgress
+        }
+        set {
+            _writeInProgressLock.wait()
+            defer {
+                _writeInProgressLock.signal()
+            }
+            _writeInProgress = newValue
+        }
+    }
+    
     ///Largest number of bytes we're willing to allocate for a Read
     // it's an anti-heartbleed-type paranoia check
     private var maxReadLength: Int = 1048576
@@ -105,6 +125,11 @@ public class PoCSocketConnectionListener: ParserConnecting {
         if !self.responseCompleted && !self.errorOccurred {
             return
         }
+        
+        if !self.writeInProgress && !self.errorOccurred {
+            return
+        }
+        
         if (self.socket?.socketfd ?? -1) > 0 {
             self.socket?.shutdownAndClose()
         }
@@ -151,7 +176,7 @@ public class PoCSocketConnectionListener: ParserConnecting {
 
     /// Check if the socket is idle, and if so, call close()
     func closeIfIdleSocket() {
-        if !self.responseCompleted {
+        if !self.responseCompleted || self.writeInProgress {
             //We're in the middle of a connection - we're not idle
             return
         }
@@ -303,6 +328,13 @@ public class PoCSocketConnectionListener: ParserConnecting {
     ///
     /// - Parameter data: data to be written
     public func write(_ data: Data) {
+        self.writeInProgress = true
+        defer {
+             self.writeInProgress = false
+            if self.shouldShutdown {
+                self.close()
+            }
+        }
         do {
             var written: Int = 0
             var offset = 0
