@@ -171,7 +171,7 @@ internal class PoCSocket {
         retVal.isConnected = true
         retVal.socketfd = acceptFD
         #if os(Linux)
-            retVal.remoteAcceptedPort = ntohs(acceptAddr.sin_port)
+            retVal.remoteAcceptedPort = Int32(ntohs(acceptAddr.sin_port))
         #else
             retVal.remoteAcceptedPort = Int32((Int(OSHostByteOrder()) != OSLittleEndian ? UInt16(acceptAddr.sin_port) : _OSSwapInt16(UInt16(acceptAddr.sin_port))))
         #endif
