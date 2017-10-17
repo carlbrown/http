@@ -213,7 +213,8 @@ public class StreamingParser: HTTPResponseWriter {
     ///
     /// - Parameter data: data coming from network
     /// - Returns: number of bytes that we sent to the parser
-    public func readStream(data: Data) -> Int {
+    public func readStream(data: Data, socketFD:Int? = nil) -> Int {
+        socketDebuggingFD = socketFD
         return data.withUnsafeBytes { (ptr) -> Int in
             return http_parser_execute(&self.httpParser, &self.httpParserSettings, ptr, data.count)
         }
@@ -262,6 +263,9 @@ public class StreamingParser: HTTPResponseWriter {
                 //Under heaptrack, this may appear to leak via _CFGetTSDCreateIfNeeded, 
                 //  apparently, that's because it triggers thread metadata to be created
                 self.parsedURL = String(data:parserBuffer, encoding: .utf8)
+                if let socketDebuggingFD = socketDebuggingFD {
+                    print("Found URL \(self.parsedURL!) on socket \(socketDebuggingFD)")
+                }
                 self.parserBuffer = nil
             } else {
                 print("Missing parserBuffer after \(lastCallBack)")

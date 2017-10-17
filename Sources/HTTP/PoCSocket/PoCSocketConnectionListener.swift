@@ -245,7 +245,7 @@ public class PoCSocketConnectionListener: ParserConnecting {
                             strongSelf.responseCompleted = false
                             
                             let data = Data(bytes: readBuffer, count: length)
-                            let numberParsed = strongSelf.parser?.readStream(data:data) ?? 0
+                            let numberParsed = strongSelf.parser?.readStream(data:data, socketFD: Int(strongSelf.socketFD)) ?? 0
                             
                             if numberParsed != data.count {
                                 print("Error: wrong number of bytes consumed by parser (\(numberParsed) instead of \(data.count) on socket \(strongSocket.socketfd)")
