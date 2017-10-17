@@ -250,6 +250,9 @@ public class PoCSocketConnectionListener: ParserConnecting {
                             if numberParsed != data.count {
                                 print("Error: wrong number of bytes consumed by parser (\(numberParsed) instead of \(data.count) on socket \(strongSocket.socketfd)")
                             }
+                            
+                            print("Successfully parsed \(numberParsed) bytes from socket \(strongSocket.socketfd)")
+
                         }
                         readBuffer.deallocate(capacity: maxLength)
                     } else {
@@ -294,6 +297,7 @@ public class PoCSocketConnectionListener: ParserConnecting {
     ///
     /// - Parameter bytes: Data object to be queued to be written to the socket
     public func queueSocketWrite(_ bytes: Data, completion:@escaping (Result) -> Void) {
+        print("Queueing \(bytes.count) bytes onto socket \(self.socket?.socketfd ?? -1)")
         self.socketWriterQueue.async { [weak self] in
             self?.write(bytes)
             completion(.ok)
@@ -317,6 +321,7 @@ public class PoCSocketConnectionListener: ParserConnecting {
                             print("Received broken write socket \(strongSocket.socketfd) indication trying to write \(data.count - offset) bytes at offset \(offset)")
                             errorOccurred = true
                         } else {
+                            print("Wrote \(result) bytes to socket \(strongSocket.socketfd ?? -1)")
                             if offset > 0 {
                                 print("Socket \(strongSocket.socketfd) wrote \(result) bytes of remainder.")
                             }
