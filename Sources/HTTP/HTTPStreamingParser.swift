@@ -42,6 +42,26 @@ public class StreamingParser: HTTPResponseWriter {
         }
     }
 
+    /// Socket File Descriptor so we can log it for debugging
+    private let _socketDebuggingFDLock = DispatchSemaphore(value: 1)
+    private var _socketDebuggingFD: Int?
+    public var socketDebuggingFD: Int? {
+        get {
+            _socketDebuggingFDLock.wait()
+            defer {
+                _socketDebuggingFDLock.signal()
+            }
+            return _socketDebuggingFD
+        }
+        set {
+            _socketDebuggingFDLock.wait()
+            defer {
+                _socketDebuggingFDLock.signal()
+            }
+            _socketDebuggingFD = newValue
+        }
+    }
+
     /// Optional delegate that can tell us how many connections are in-flight.
     public weak var connectionCounter: CurrentConnectionCounting?
 
@@ -169,7 +189,8 @@ public class StreamingParser: HTTPResponseWriter {
     ///
     /// - Parameter data: data coming from network
     /// - Returns: number of bytes that we sent to the parser
-    public func readStream(data: Data) -> Int {
+    public func readStream(data: Data, socketFD:Int? = nil) -> Int {
+        socketDebuggingFD = socketFD
         return data.withUnsafeBytes { (ptr) -> Int in
             return http_parser_execute(&self.httpParser, &self.httpParserSettings, ptr, data.count)
         }
@@ -218,6 +239,9 @@ public class StreamingParser: HTTPResponseWriter {
                 //Under heaptrack, this may appear to leak via _CFGetTSDCreateIfNeeded, 
                 //  apparently, that's because it triggers thread metadata to be created
                 self.parsedURL = String(data:parserBuffer, encoding: .utf8)
+                if let socketDebuggingFD = socketDebuggingFD {
+                    print("Found URL \(self.parsedURL!) on socket \(socketDebuggingFD)")
+                }
                 self.parserBuffer = nil
             } else {
                 print("Missing parserBuffer after \(lastCallBack)")
