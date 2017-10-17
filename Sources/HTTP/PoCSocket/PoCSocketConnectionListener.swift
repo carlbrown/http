@@ -345,7 +345,7 @@ public class PoCSocketConnectionListener: ParserConnecting {
                         let result = try strongSocket.socketWrite(from: ptr + offset, bufSize:
                             data.count - offset)
                         if result < 0 {
-                            print("Received broken write socket \(strongSocket.socketfd) indication")
+                            print("Received broken write socket \(strongSocket.socketfd) indication trying to write \(data.count - offset) bytes at offset \(offset)")
                             errorOccurred = true
                         } else {
                             if offset > 0 {
