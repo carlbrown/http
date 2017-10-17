@@ -231,6 +231,7 @@ public class PoCSocketConnectionListener: ParserConnecting {
                 try strongSocket.setBlocking(mode: true)
                 tempReaderSource = DispatchSource.makeReadSource(fileDescriptor: strongSocket.socketfd,
                                                                      queue: socketReaderQueue)
+                print("Processing begin of socket \(strongSocket.socketfd)")
             } catch {
                 print("Socket \(strongSocket.socketfd) cannot be set to Blocking in process(): \(error)")
                 return
