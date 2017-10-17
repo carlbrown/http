@@ -172,6 +172,7 @@ class ConnectionListenerCollection {
 
     /// Used when shutting down the server to close all connections
     func closeAll() {
+        print("closeAll called")
         lock.wait()
         storage.filter { nil != $0.value }.forEach { $0.value?.close() }
         lock.signal()
