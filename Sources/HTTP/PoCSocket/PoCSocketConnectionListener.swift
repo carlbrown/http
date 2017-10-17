@@ -120,6 +120,8 @@ public class PoCSocketConnectionListener: ParserConnecting {
 
     /// Close the socket and free up memory unless we're in the middle of a request
     func close() {
+        print("Close called on socket \(self.socket?.socketfd ?? -1)")
+        
         self.shouldShutdown = true
         
         if !self.responseCompleted && !self.errorOccurred {
@@ -188,6 +190,8 @@ public class PoCSocketConnectionListener: ParserConnecting {
     }
     
     func cleanup() {
+        print("Cleanup called on socket \(self.socket?.socketfd ?? -1)")
+
         self.readerSource?.setEventHandler(handler: nil)
         self.readerSource?.setCancelHandler(handler: nil)
         
