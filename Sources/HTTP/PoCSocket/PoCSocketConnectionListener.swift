@@ -171,6 +171,7 @@ public class PoCSocketConnectionListener: ParserConnecting {
     public func closeWriter() {
         self.socketWriterQueue.async { [weak self] in
             if self?.readerSource?.isCancelled ?? true {
+                print("closeWriter called on readerSource.cancelled socket \(self?.socket?.socketfd ?? -1)")
                 self?.close()
             }
         }
@@ -314,6 +315,7 @@ public class PoCSocketConnectionListener: ParserConnecting {
         
         tempReaderSource.setCancelHandler { [weak self] in
             if let strongSelf = self {
+                print("Cancel Handler running on socket \(strongSelf.socket?.socketfd ?? -1)")
                 strongSelf.close() //close if we can
             }
         }
