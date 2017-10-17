@@ -350,10 +350,10 @@ public class PoCSocketConnectionListener: ParserConnecting {
                         let result = try strongSocket.socketWrite(from: ptr + offset, bufSize:
                             data.count - offset)
                         if result < 0 {
-                            print("Received broken write socket \(strongSocket.socketfd) indication trying to write \(data.count - offset) bytes at offset \(offset)")
+                            print("Received broken write socket \(strongSocket.socketfd) indication trying to write \(data.count - offset) bytes at offset \(offset) with errno \(errno)")
                             errorOccurred = true
                         } else {
-                            print("Wrote \(result) bytes to socket \(strongSocket.socketfd ?? -1)")
+                            print("Wrote \(result) bytes to socket \(strongSocket.socketfd)")
                             if offset > 0 {
                                 print("Socket \(strongSocket.socketfd) wrote \(result) bytes of remainder.")
                             }
