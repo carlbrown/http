@@ -187,6 +187,7 @@ public class PoCSocketConnectionListener: ParserConnecting {
         self.responseCompleted = true
         self.socketWriterQueue.async { [weak self] in
             if self?.readerSource?.isCancelled ?? true {
+                print("responseComplete called on socket \(self?.socket?.socketfd ?? -1)")
                 self?.close()
             }
         }
@@ -194,6 +195,7 @@ public class PoCSocketConnectionListener: ParserConnecting {
     
     /// Called by the parser to let us know that a response is complete and we should close the socket
     public func responseCompleteCloseWriter() {
+        print("responseCompleteCloseWriter called on socket \(socket?.socketfd ?? -1)")
         self.responseCompleted = true
         self.socketWriterQueue.async { [weak self] in
             self?.close()
