@@ -207,7 +207,7 @@ public class PoCSocketConnectionListener: ParserConnecting {
                 tempReaderSource = DispatchSource.makeReadSource(fileDescriptor: strongSocket.socketfd,
                                                                      queue: socketReaderQueue)
             } catch {
-                print("Socket cannot be set to Blocking in process(): \(error)")
+                print("Socket \(strongSocket.socketfd) cannot be set to Blocking in process(): \(error)")
                 return
             }
         } else {
@@ -247,7 +247,7 @@ public class PoCSocketConnectionListener: ParserConnecting {
                             let numberParsed = strongSelf.parser?.readStream(data:data) ?? 0
                             
                             if numberParsed != data.count {
-                                print("Error: wrong number of bytes consumed by parser (\(numberParsed) instead of \(data.count)")
+                                print("Error: wrong number of bytes consumed by parser (\(numberParsed) instead of \(data.count) on socket \(strongSocket.socketfd)")
                             }
                         }
                         readBuffer.deallocate(capacity: maxLength)
@@ -256,23 +256,23 @@ public class PoCSocketConnectionListener: ParserConnecting {
                         length = -1
                     }
                 } catch {
-                    //print("ReaderSource Event Error: \(error)")
+                    print("ReaderSource Event Error: \(error)")
                     strongSelf.readerSource?.cancel()
                     strongSelf.errorOccurred = true
                     strongSelf.close()
                 }
                 if length == 0 {
-                    //print("ReaderSource Read count zero. Cancelling.")
+                    print("ReaderSource Read count zero on socket \(strongSocket.socketfd). Cancelling.")
                     strongSelf.readerSource?.cancel()
                 }
                 if length < 0 {
-                    //print("ReaderSource Read count negative. Closing.")
+                    print("ReaderSource Read count negative on socket \(strongSocket.socketfd). Closing.")
                     strongSelf.errorOccurred = true
                     strongSelf.readerSource?.cancel()
                     strongSelf.close()
                 }
             } else {
-                //print("ReaderSource Read found nil socket. Closing.")
+                print("ReaderSource Read found nil socket. Closing.")
                 strongSelf.errorOccurred = true
                 strongSelf.readerSource?.cancel()
                 strongSelf.close()
@@ -308,27 +308,28 @@ public class PoCSocketConnectionListener: ParserConnecting {
             var offset = 0
 
             while written < data.count && !errorOccurred {
-                try data.withUnsafeBytes { (ptr: UnsafePointer<UInt8>) in
-                    if let strongSocket = socket {
+                if let strongSocket = socket {
+                    try data.withUnsafeBytes { (ptr: UnsafePointer<UInt8>) in
                         let result = try strongSocket.socketWrite(from: ptr + offset, bufSize:
                             data.count - offset)
                         if result < 0 {
-                            //print("Received broken write socket indication")
+                            print("Received broken write socket \(strongSocket.socketfd) indication")
                             errorOccurred = true
                         } else {
+                            if offset > 0 {
+                                print("Socket \(strongSocket.socketfd) wrote \(result) bytes of remainder.")
+                            }
                             written += result
                         }
-                    } else {
-                        //print("Socket unexpectedly nil during write")
-                        errorOccurred = true
                     }
+                    offset = data.count - written
+                    if (offset > 0) {
+                        print("Socket \(strongSocket.socketfd) write left remainder. Retrying \(offset) bytes")
+                    }
+                } else {
+                    print("Socket unexpectedly nil during write")
+                    errorOccurred = true
                 }
-                offset = data.count - written
-                /*
-                if (offset > 0) {
-                    print("Socket write left remainder. Retrying \(offset) bytes")
-                }
-                 */
             }
             if errorOccurred {
                 close()
