@@ -37,7 +37,7 @@ internal class PoCSocket {
     internal private(set) var isConnected = false
     
     /// check for socket reuse
-    internal let uuid = UUID().uuidString
+    internal let uuid = UUID()
     
     /// track whether a shutdown is in progress so we can suppress error messages
     private let _isShuttingDownLock = DispatchSemaphore(value: 1)
