@@ -120,7 +120,7 @@ public class PoCSocketConnectionListener: ParserConnecting {
 
     /// Close the socket and free up memory unless we're in the middle of a request
     func close() {
-        print("Close called on socket \(self.socket?.socketfd ?? -1)")
+        print("Close called on socket \(self.socket?.socketfd ?? -1), cancelled state is \(self.readerSource?.isCancelled ?? true)")
         
         self.shouldShutdown = true
         
@@ -191,7 +191,7 @@ public class PoCSocketConnectionListener: ParserConnecting {
     }
     
     func cleanup() {
-        print("Cleanup called on socket \(self.socket?.socketfd ?? -1)")
+        print("Cleanup called on socket \(self.socket?.socketfd ?? -1), cancelled state is \(self.readerSource?.isCancelled ?? true)")
 
         self.readerSource?.setEventHandler(handler: nil)
         self.readerSource?.setCancelHandler(handler: nil)
@@ -209,10 +209,11 @@ public class PoCSocketConnectionListener: ParserConnecting {
 
     /// Called by the parser to let us know that a response is complete, and we can close after timeout
     public func responseComplete() {
+        print("responseComplete called on socket \(socket?.socketfd ?? -1), cancelled state is \(self.readerSource?.isCancelled ?? true)")
         self.responseCompleted = true
         self.socketWriterQueue.async { [weak self] in
             if self?.readerSource?.isCancelled ?? true {
-                print("responseComplete called on socket \(self?.socket?.socketfd ?? -1)")
+                print("responseComplete calling close on socket \(self?.socket?.socketfd ?? -1), cancelled state is \(self?.readerSource?.isCancelled ?? true)")
                 self?.close()
             }
         }
@@ -220,9 +221,10 @@ public class PoCSocketConnectionListener: ParserConnecting {
     
     /// Called by the parser to let us know that a response is complete and we should close the socket
     public func responseCompleteCloseWriter() {
-        print("responseCompleteCloseWriter called on socket \(socket?.socketfd ?? -1)")
+        print("responseCompleteCloseWriter called on socket \(socket?.socketfd ?? -1), cancelled state is \(self.readerSource?.isCancelled ?? true)")
         self.responseCompleted = true
         self.socketWriterQueue.async { [weak self] in
+            print("responseCompleteCloseWriter calling close on socket \(self?.socket?.socketfd ?? -1), cancelled state is \(self?.readerSource?.isCancelled ?? true)")
             self?.close()
         }
     }
