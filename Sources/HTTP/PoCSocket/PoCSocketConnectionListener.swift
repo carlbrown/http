@@ -147,6 +147,8 @@ public class PoCSocketConnectionListener: ParserConnecting {
 
     /// Close the socket and free up memory unless we're in the middle of a request
     func close() {
+        print("Close called on socket \(self.socket?.socketfd ?? -1)/\(self.socket?.uuid.uuidString ?? "N/A"), cancelled state is \(self.readerSource?.isCancelled ?? true)")
+        
         self.shouldShutdown = true
         
         if !self.responseCompleted && !self.errorOccurred {
@@ -194,6 +196,7 @@ public class PoCSocketConnectionListener: ParserConnecting {
     public func closeWriter() {
         self.socketWriterQueue.async { [weak self] in
             if self?.readerSource?.isCancelled ?? true {
+                print("closeWriter called on readerSource.cancelled socket \(self?.socket?.socketfd ?? -1)/\(self?.socket?.uuid.uuidString ?? "N/A")")
                 self?.close()
             }
         }
@@ -207,12 +210,13 @@ public class PoCSocketConnectionListener: ParserConnecting {
         }
         let now = Date().timeIntervalSinceReferenceDate
         if let keepAliveUntil = parser?.keepAliveUntil, now >= keepAliveUntil {
-            print("Closing idle socket \(socketFD)")
+            print("Closing idle socket \(socketFD)/\(self.socket?.uuid.uuidString ?? "N/A")")
             close()
         }
     }
     
     func cleanup() {
+        print("Cleanup called on socket \(self.socket?.socketfd ?? -1)/\(self.socket?.uuid.uuidString ?? "N/A"), cancelled state is \(self.readerSource?.isCancelled ?? true)")
         guard !cleanupCalled else {
             // This prevents a rare crash (~1 in 300,000) where cleanup is called from both reader and writer
             //  queues simultaneously
@@ -238,9 +242,11 @@ public class PoCSocketConnectionListener: ParserConnecting {
 
     /// Called by the parser to let us know that a response is complete, and we can close after timeout
     public func responseComplete() {
+        print("responseComplete called on socket \(socket?.socketfd ?? -1)/\(self.socket?.uuid.uuidString ?? "N/A"), cancelled state is \(self.readerSource?.isCancelled ?? true)")
         self.responseCompleted = true
         self.socketWriterQueue.async { [weak self] in
             if self?.readerSource?.isCancelled ?? true {
+                print("responseComplete calling close on socket \(self?.socket?.socketfd ?? -1)/\(self?.socket?.uuid.uuidString ?? "N/A"), cancelled state is \(self?.readerSource?.isCancelled ?? true)")
                 self?.close()
             }
         }
@@ -248,8 +254,10 @@ public class PoCSocketConnectionListener: ParserConnecting {
     
     /// Called by the parser to let us know that a response is complete and we should close the socket
     public func responseCompleteCloseWriter() {
+        print("responseCompleteCloseWriter called on socket \(socket?.socketfd ?? -1)/\(self.socket?.uuid.uuidString ?? "N/A"), cancelled state is \(self.readerSource?.isCancelled ?? true)")
         self.responseCompleted = true
         self.socketWriterQueue.async { [weak self] in
+            print("responseCompleteCloseWriter calling close on socket \(self?.socket?.socketfd ?? -1)/\(self?.socket?.uuid.uuidString ?? "N/A"), cancelled state is \(self?.readerSource?.isCancelled ?? true)")
             self?.close()
         }
     }
@@ -265,8 +273,9 @@ public class PoCSocketConnectionListener: ParserConnecting {
                 try strongSocket.setBlocking(mode: false)
                 tempReaderSource = DispatchSource.makeReadSource(fileDescriptor: strongSocket.socketfd,
                                                                      queue: socketReaderQueue)
+                print("Processing begin of socket \(strongSocket.socketfd)/\(self.socket?.uuid.uuidString ?? "N/A"), cancelled state is \(tempReaderSource.isCancelled)")
             } catch {
-                print("Socket cannot be set to Blocking in process(): \(error)")
+                print("Socket \(strongSocket.socketfd)/\(self.socket?.uuid.uuidString ?? "N/A") cannot be set to Blocking in process(): \(error)")
                 return
             }
         } else {
@@ -306,8 +315,11 @@ public class PoCSocketConnectionListener: ParserConnecting {
                             let numberParsed = strongSelf.parser?.readStream(data:data) ?? 0
                             
                             if numberParsed != data.count {
-                                print("Error: wrong number of bytes consumed by parser (\(numberParsed) instead of \(data.count)")
+                                print("Error: wrong number of bytes consumed by parser (\(numberParsed) instead of \(data.count) on socket \(strongSocket.socketfd)/\(strongSocket.uuid)")
                             }
+                            
+                            print("Successfully parsed \(numberParsed) bytes from socket \(strongSocket.socketfd)/\(strongSocket.uuid), cancelled state is \(tempReaderSource.isCancelled)")
+
                         }
                         readBuffer.deallocate(capacity: maxLength)
                     } else {
@@ -315,12 +327,13 @@ public class PoCSocketConnectionListener: ParserConnecting {
                         length = -1
                     }
                 } catch {
-                    //print("ReaderSource Event Error: \(error)")
+                    print("ReaderSource Event Error: \(error)")
                     strongSelf.readerSource?.cancel()
                     strongSelf.errorOccurred = true
                     strongSelf.close()
                 }
                 if length == 0 {
+                    print("ReaderSource Read count zero on socket \(strongSocket.socketfd)/\(strongSocket.uuid). Cancelling.")
                     if (errno == EWOULDBLOCK || errno == EAGAIN) {
                         //Nothing to do - wait for us to get triggered again
                         return
@@ -329,13 +342,13 @@ public class PoCSocketConnectionListener: ParserConnecting {
                     strongSelf.readerSource?.cancel()
                 }
                 if length < 0 {
-                    //print("ReaderSource Read count negative. Closing.")
+                    print("ReaderSource Read count negative (\(length)) on socket \(strongSocket.socketfd)/\(strongSocket.uuid). Closing. ShouldClose \(strongSelf.shouldShutdown), ResponseComplete \(strongSelf.responseCompleted), Errno \(errno)")
                     strongSelf.errorOccurred = true
                     strongSelf.readerSource?.cancel()
                     strongSelf.close()
                 }
             } else {
-                //print("ReaderSource Read found nil socket. Closing.")
+                print("ReaderSource Read found nil socket. Closing.")
                 strongSelf.errorOccurred = true
                 strongSelf.readerSource?.cancel()
                 strongSelf.close()
@@ -344,6 +357,7 @@ public class PoCSocketConnectionListener: ParserConnecting {
         
         tempReaderSource.setCancelHandler { [weak self] in
             if let strongSelf = self {
+                print("Cancel Handler running on socket \(strongSelf.socket?.socketfd ?? -1)/\(strongSelf.socket?.uuid.uuidString ?? "N/A")")
                 strongSelf.close() //close if we can
             }
         }
@@ -391,6 +405,7 @@ public class PoCSocketConnectionListener: ParserConnecting {
     ///
     /// - Parameter bytes: Data object to be queued to be written to the socket
     public func queueSocketWrite(_ bytes: Data, completion:@escaping (Result) -> Void) {
+        print("Queueing \(bytes.count) bytes onto socket \(self.socket?.socketfd ?? -1)/\(self.socket?.uuid.uuidString ?? "N/A"), cancelled state is \(self.readerSource?.isCancelled ?? true)")
         self.socketWriterQueue.async { [weak self] in
             self?.stuffToWrite.append(WriteCollection(data: bytes, completion: completion))
         }
@@ -407,41 +422,43 @@ public class PoCSocketConnectionListener: ParserConnecting {
         do {
             var written: Int = 0
             var offset = 0
-
+            
             while written < data.count && !errorOccurred {
-                try data.withUnsafeBytes { (ptr: UnsafePointer<UInt8>) in
-                    if let strongSocket = socket {
+                if let strongSocket = socket {
+                    try data.withUnsafeBytes { (ptr: UnsafePointer<UInt8>) in
                         let result = try strongSocket.socketWrite(from: ptr + offset, bufSize:
                             data.count - offset)
                         if result < 0 {
-                            //print("Received broken write socket indication")
+                            print("Received broken write socket \(strongSocket.socketfd)/\(self.socket?.uuid.uuidString ?? "N/A") indication trying to write \(data.count - offset) bytes at offset \(offset) with errno \(errno), cancelled state is \(self.readerSource?.isCancelled ?? true)")
                             errorOccurred = true
                         } else if result == 0 {
                             if errno == EAGAIN || errno == EWOULDBLOCK {
+                                print("Would block on socket \(strongSocket.socketfd)/\(self.socket?.uuid.uuidString ?? "N/A"), cancelled state is \(self.readerSource?.isCancelled ?? true)")
                                 //Put what's left back on the front of the queue and exit
                                 //FIXME: test partially written case
                                 self.stuffToWrite.insert(WriteCollection(data:Data(),completion: completion), at: 0)
                                 return
                             }
                         } else {
+                            print("Socket \(strongSocket.socketfd)/\(self.socket?.uuid.uuidString ?? "N/A") write left remainder. Retrying \(offset) bytes")
                             written += result
                         }
-                    } else {
-                        //print("Socket unexpectedly nil during write")
-                        errorOccurred = true
                     }
+                    offset = data.count - written
+                    if (offset > 0) {
+                        print("Socket write left remainder. Retrying \(offset) bytes")
+                    } else {
+                        print("Socket \(strongSocket.socketfd)/\(self.socket?.uuid.uuidString ?? "N/A") wrote \(written) bytes")
+                    }
+                } else {
+                    print("Socket unexpectedly nil during write")
+                    errorOccurred = true
                 }
-                offset = data.count - written
-                /*
-                if (offset > 0) {
-                    print("Socket write left remainder. Retrying \(offset) bytes")
+                if errorOccurred {
+                    close()
+                    completion(.error(PoCSocketError.UnknownError))
+                    return
                 }
-                 */
-            }
-            if errorOccurred {
-                close()
-                completion(.error(PoCSocketError.UnknownError))
-                return
             }
         } catch {
             print("Received write socket error: \(error)")

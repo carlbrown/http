@@ -117,6 +117,7 @@ public class PoCSocketSimpleServer: CurrentConnectionCounting {
                         }
                         break
                     }
+                    print("accepted Client Socket \(clientSocket.socketfd)/\(clientSocket.uuid)")
                     let streamingParser = StreamingParser(handler: handler, connectionCounter: self, keepAliveTimeout: keepAliveTimeout)
                     let readQueue = readQueues[listenerCount % self.queueMax]
                     let writeQueue = writeQueues[listenerCount % self.queueMax]
@@ -174,6 +175,7 @@ class ConnectionListenerCollection {
 
     /// Used when shutting down the server to close all connections
     func closeAll() {
+        print("closeAll called")
         lock.wait()
         storage.filter {
             nil != $0.value
