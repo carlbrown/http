@@ -10,6 +10,10 @@ import CHTTPParser
 import Foundation
 import Dispatch
 
+public enum StreamingParserError: Error {
+    case ConnectionAbortedError
+}
+
 /// Class that wraps the CHTTPParser and calls the `HTTPRequestHandler` to get the response
 /// :nodoc:
 public class StreamingParser: HTTPResponseWriter {
@@ -39,6 +43,46 @@ public class StreamingParser: HTTPResponseWriter {
                 _keepAliveUntilLock.signal()
             }
             _keepAliveUntil = newValue
+        }
+    }
+
+    /// Socket File Descriptor so we can log it for debugging
+    private let _socketDebuggingFDLock = DispatchSemaphore(value: 1)
+    private var _socketDebuggingFD: Int?
+    internal var socketDebuggingFD: Int? {
+        get {
+            _socketDebuggingFDLock.wait()
+            defer {
+                _socketDebuggingFDLock.signal()
+            }
+            return _socketDebuggingFD
+        }
+        set {
+            _socketDebuggingFDLock.wait()
+            defer {
+                _socketDebuggingFDLock.signal()
+            }
+            _socketDebuggingFD = newValue
+        }
+    }
+    
+    /// Tracks when we've been told socket has been closed. Needs to have a lock, since if we get confused, bat things happen
+    private let _abortCalledLock = DispatchSemaphore(value: 1)
+    private var _abortCalled: Bool = false
+    internal var abortCalled: Bool {
+        get {
+            _abortCalledLock.wait()
+            defer {
+                _abortCalledLock.signal()
+            }
+            return _abortCalled
+        }
+        set {
+            _abortCalledLock.wait()
+            defer {
+                _abortCalledLock.signal()
+            }
+            _abortCalled = newValue
         }
     }
 
@@ -378,6 +422,10 @@ public class StreamingParser: HTTPResponseWriter {
             header += "\(key): \(value)\r\n"
         }
         header.append("\r\n")
+        guard !abortCalled else {
+            completion(.error(StreamingParserError.ConnectionAbortedError))
+            return
+        }
 
         // FIXME headers are US-ASCII, anything else should be encoded using [RFC5987] some lines above
         // TODO use requested encoding if specified
@@ -452,11 +500,20 @@ public class StreamingParser: HTTPResponseWriter {
         } else {
             dataToWrite = data.withUnsafeBytes { Data($0) }
         }
+        
+        guard !abortCalled else {
+            completion(.error(StreamingParserError.ConnectionAbortedError))
+            return
+        }
 
         self.parserConnector?.queueSocketWrite(dataToWrite, completion: completion)
     }
 
     public func done(completion: @escaping (Result) -> Void) {
+        guard !abortCalled else {
+            completion(.error(StreamingParserError.ConnectionAbortedError))
+            return
+        }
         if isChunked {
             let chunkTerminate = "0\r\n\r\n".data(using: .utf8)!
             self.parserConnector?.queueSocketWrite(chunkTerminate, completion: completion)
@@ -479,15 +536,23 @@ public class StreamingParser: HTTPResponseWriter {
         //  But since that block was removed, we're calling it directly
         if self.clientRequestedKeepAlive {
             self.keepAliveUntil = Date(timeIntervalSinceNow: keepAliveTimeout).timeIntervalSinceReferenceDate
+            guard !abortCalled else {
+                completion(.error(StreamingParserError.ConnectionAbortedError))
+                return
+            }
             self.parserConnector?.responseComplete()
         } else {
+            guard !abortCalled else {
+                completion(.error(StreamingParserError.ConnectionAbortedError))
+                return
+            }
             self.parserConnector?.responseCompleteCloseWriter()
         }
         completion(.ok)
     }
 
     public func abort() {
-        fatalError("abort called, not sure what to do with it")
+        abortCalled = true
     }
 
     deinit {
