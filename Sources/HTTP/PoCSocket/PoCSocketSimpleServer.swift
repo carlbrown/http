@@ -115,7 +115,7 @@ public class PoCSocketSimpleServer: CurrentConnectionCounting {
                         }
                         break
                     }
-                    print("accepted Client Socket \(clientSocket.socketfd)")
+                    print("accepted Client Socket \(clientSocket.socketfd)/\(clientSocket.uuid)")
                     let streamingParser = StreamingParser(handler: handler, connectionCounter: self, keepAliveTimeout: keepAliveTimeout)
                     let readQueue = readQueues[listenerCount % self.queueMax]
                     let writeQueue = writeQueues[listenerCount % self.queueMax]
