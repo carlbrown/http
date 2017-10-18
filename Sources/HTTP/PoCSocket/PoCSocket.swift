@@ -59,6 +59,26 @@ internal class PoCSocket {
         }
     }
 
+    /// track whether a the socket has already been closed.
+    private let _hasClosedLock = DispatchSemaphore(value: 1)
+    private var _hasClosed: Bool = false
+    private var hasClosed: Bool {
+        get {
+            _hasClosedLock.wait()
+            defer {
+                _hasClosedLock.signal()
+            }
+            return _hasClosed
+        }
+        set {
+            _hasClosedLock.wait()
+            defer {
+                _hasClosedLock.signal()
+            }
+            _hasClosed = newValue
+        }
+    }
+
     /// Call recv(2) with buffer allocated by our caller and return the output
     ///
     /// - Parameters:
@@ -121,6 +141,10 @@ internal class PoCSocket {
             //Nothing to do. Maybe it was closed already
             return
         }
+        if hasClosed {
+            //Nothing to do. It was closed already
+            return
+        }
         //print("Shutting down socket \(self.socketfd)")
         if self.isListening || self.isConnected {
             //print("Shutting down socket")
@@ -129,6 +153,7 @@ internal class PoCSocket {
         }
         self.isConnected = false
         close(self.socketfd)
+        self.hasClosed = true
     }
         
     /// Thin wrapper around `accept(2)`
