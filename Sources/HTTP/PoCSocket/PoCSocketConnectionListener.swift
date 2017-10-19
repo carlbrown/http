@@ -198,9 +198,6 @@ public class PoCSocketConnectionListener: ParserConnecting {
             strongParser.parserConnector = nil
         }
         
-        self.readerSource = nil
-        self.socket = nil
-        self.parser = nil
         cleanupCalled = true
     }
 
