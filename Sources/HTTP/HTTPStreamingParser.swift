@@ -91,6 +91,9 @@ public class StreamingParser: HTTPResponseWriter {
 
     /// Holds the bytes that come from the CHTTPParser until we have enough of them to do something with it
     var parserBuffer: Data?
+    
+    /// Lock for parser buffer. TODO: Figure out how to wrap this without copying it
+    private let _parserBufferLock = DispatchSemaphore(value: 1)
 
     /// HTTP Parser
     var httpParser = http_parser()
@@ -233,6 +236,8 @@ public class StreamingParser: HTTPResponseWriter {
         if lastCallBack == currentCallBack {
             return false
         }
+        _parserBufferLock.wait()
+        defer { _parserBufferLock.signal() }
         switch lastCallBack {
         case .headerFieldReceived:
             if let parserBuffer = self.parserBuffer {
@@ -318,6 +323,9 @@ public class StreamingParser: HTTPResponseWriter {
     func headerFieldReceived(data: UnsafePointer<Int8>?, length: Int) -> Int32 {
         processCurrentCallback(.headerFieldReceived)
         guard let data = data else { return 0 }
+        _parserBufferLock.wait()
+        defer { _parserBufferLock.signal() }
+
         data.withMemoryRebound(to: UInt8.self, capacity: length) { (ptr) -> Void in
             if var parserBuffer = parserBuffer {
                 parserBuffer.append(ptr, count: length)
@@ -331,6 +339,9 @@ public class StreamingParser: HTTPResponseWriter {
     func headerValueReceived(data: UnsafePointer<Int8>?, length: Int) -> Int32 {
         processCurrentCallback(.headerValueReceived)
         guard let data = data else { return 0 }
+        _parserBufferLock.wait()
+        defer { _parserBufferLock.signal() }
+
         data.withMemoryRebound(to: UInt8.self, capacity: length) { (ptr) -> Void in
             if var parserBuffer = parserBuffer {
                 parserBuffer.append(ptr, count: length)
@@ -376,6 +387,9 @@ public class StreamingParser: HTTPResponseWriter {
     func urlReceived(data: UnsafePointer<Int8>?, length: Int) -> Int32 {
         processCurrentCallback(.urlReceived)
         guard let data = data else { return 0 }
+        _parserBufferLock.wait()
+        defer { _parserBufferLock.signal() }
+
         data.withMemoryRebound(to: UInt8.self, capacity: length) { (ptr) -> Void in
             if var parserBuffer = parserBuffer {
                 parserBuffer.append(ptr, count: length)
@@ -523,7 +537,9 @@ public class StreamingParser: HTTPResponseWriter {
         self.parsedURL = nil
         self.parsedHeaders = HTTPHeaders()
         self.lastHeaderName = nil
+        _parserBufferLock.wait()
         self.parserBuffer = nil
+        _parserBufferLock.signal() 
         self.parsedHTTPMethod = nil
         self.parsedHTTPVersion = nil
         self.lastCallBack = .idle
