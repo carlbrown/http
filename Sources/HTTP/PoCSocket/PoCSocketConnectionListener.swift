@@ -189,12 +189,17 @@ public class PoCSocketConnectionListener: ParserConnecting {
             return
         }
         
-        self.readerSource?.setEventHandler(handler: nil)
-        self.readerSource?.setCancelHandler(handler: nil)
+        //allow for memory to be reclaimed
+        if let strongReaderSource = self.readerSource {
+            strongReaderSource.setEventHandler(handler: nil)
+            strongReaderSource.setCancelHandler(handler: nil)
+        }
+        if let strongParser = self.parser {
+            strongParser.parserConnector = nil
+        }
         
         self.readerSource = nil
         self.socket = nil
-        self.parser?.parserConnector = nil //allows for memory to be reclaimed
         self.parser = nil
         cleanupCalled = true
     }
