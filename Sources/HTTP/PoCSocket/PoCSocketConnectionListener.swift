@@ -69,6 +69,26 @@ public class PoCSocketConnectionListener: ParserConnecting {
         }
     }
     
+    ///Flag to track whether we've already called cleanup or not (with lock)
+    private let _cleanupCalledLock = DispatchSemaphore(value: 1)
+    private var _cleanupCalled: Bool = false
+    var cleanupCalled: Bool {
+        get {
+            _cleanupCalledLock.wait()
+            defer {
+                _cleanupCalledLock.signal()
+            }
+            return _cleanupCalled
+        }
+        set {
+            _cleanupCalledLock.wait()
+            defer {
+                _cleanupCalledLock.signal()
+            }
+            _cleanupCalled = newValue
+        }
+    }
+
     ///Largest number of bytes we're willing to allocate for a Read
     // it's an anti-heartbleed-type paranoia check
     private var maxReadLength: Int = 1048576
@@ -163,6 +183,12 @@ public class PoCSocketConnectionListener: ParserConnecting {
     }
     
     func cleanup() {
+        guard !cleanupCalled else {
+            // This prevents a rare crash (~1 in 300,000) where cleanup is called from both reader and writer
+            //  queues simultaneously
+            return
+        }
+        
         self.readerSource?.setEventHandler(handler: nil)
         self.readerSource?.setCancelHandler(handler: nil)
         
@@ -170,6 +196,7 @@ public class PoCSocketConnectionListener: ParserConnecting {
         self.socket = nil
         self.parser?.parserConnector = nil //allows for memory to be reclaimed
         self.parser = nil
+        cleanupCalled = true
     }
 
     /// Called by the parser to let us know that a response has started being created
