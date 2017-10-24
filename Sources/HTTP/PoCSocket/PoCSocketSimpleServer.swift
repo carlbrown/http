@@ -36,20 +36,20 @@ public class PoCSocketSimpleServer: CurrentConnectionCounting {
     private var acceptMax: Int = 8 //sensible default
 
     ///Used to stop `accept(2)`ing while shutdown in progress to avoid spurious logs
-    private let _isShuttingDownLock = DispatchSemaphore(value: 1)
+    private let _serverSemaphore = DispatchSemaphore(value: 1)
     private var _isShuttingDown: Bool = false
     var isShuttingDown: Bool {
         get {
-            _isShuttingDownLock.wait()
+            _serverSemaphore.wait()
             defer {
-                _isShuttingDownLock.signal()
+                _serverSemaphore.signal()
             }
             return _isShuttingDown
         }
         set {
-            _isShuttingDownLock.wait()
+            _serverSemaphore.wait()
             defer {
-                _isShuttingDownLock.signal()
+                _serverSemaphore.signal()
             }
             _isShuttingDown = newValue
         }

@@ -37,40 +37,39 @@ internal class PoCSocket {
     internal private(set) var isConnected = false
     
     /// track whether a shutdown is in progress so we can suppress error messages
-    private let _isShuttingDownLock = DispatchSemaphore(value: 1)
+    private let _socketSemaphore = DispatchSemaphore(value: 1)
     private var _isShuttingDown: Bool = false
     private var isShuttingDown: Bool {
         get {
-            _isShuttingDownLock.wait()
+            _socketSemaphore.wait()
             defer {
-                _isShuttingDownLock.signal()
+                _socketSemaphore.signal()
             }
             return _isShuttingDown
         }
         set {
-            _isShuttingDownLock.wait()
+            _socketSemaphore.wait()
             defer {
-                _isShuttingDownLock.signal()
+                _socketSemaphore.signal()
             }
             _isShuttingDown = newValue
         }
     }
 
     /// track whether a the socket has already been closed.
-    private let _hasClosedLock = DispatchSemaphore(value: 1)
     private var _hasClosed: Bool = false
     private var hasClosed: Bool {
         get {
-            _hasClosedLock.wait()
+            _socketSemaphore.wait()
             defer {
-                _hasClosedLock.signal()
+                _socketSemaphore.signal()
             }
             return _hasClosed
         }
         set {
-            _hasClosedLock.wait()
+            _socketSemaphore.wait()
             defer {
-                _hasClosedLock.signal()
+                _socketSemaphore.signal()
             }
             _hasClosed = newValue
         }

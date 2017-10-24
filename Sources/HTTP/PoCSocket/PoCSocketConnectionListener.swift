@@ -30,60 +30,58 @@ public class PoCSocketConnectionListener: ParserConnecting {
     private var readerSource: DispatchSourceRead?
 
     ///Flag to track whether we're in the middle of a response or not (with lock)
-    private let _responseCompletedLock = DispatchSemaphore(value: 1)
+    private let _listenerSemaphore = DispatchSemaphore(value: 1)
     private var _responseCompleted: Bool = false
     var responseCompleted: Bool {
         get {
-            _responseCompletedLock.wait()
+            _listenerSemaphore.wait()
             defer {
-                _responseCompletedLock.signal()
+                _listenerSemaphore.signal()
             }
             return _responseCompleted
         }
         set {
-            _responseCompletedLock.wait()
+            _listenerSemaphore.wait()
             defer {
-                _responseCompletedLock.signal()
+                _listenerSemaphore.signal()
             }
             _responseCompleted = newValue
         }
     }
 
     ///Flag to track whether we've received a socket error or not (with lock)
-    private let _errorOccurredLock = DispatchSemaphore(value: 1)
     private var _errorOccurred: Bool = false
     var errorOccurred: Bool {
         get {
-            _errorOccurredLock.wait()
+            _listenerSemaphore.wait()
             defer {
-                _errorOccurredLock.signal()
+                _listenerSemaphore.signal()
             }
             return _errorOccurred
         }
         set {
-            _errorOccurredLock.wait()
+            _listenerSemaphore.wait()
             defer {
-                _errorOccurredLock.signal()
+                _listenerSemaphore.signal()
             }
             _errorOccurred = newValue
         }
     }
     
     ///Flag to track whether we've already called cleanup or not (with lock)
-    private let _cleanupCalledLock = DispatchSemaphore(value: 1)
     private var _cleanupCalled: Bool = false
     var cleanupCalled: Bool {
         get {
-            _cleanupCalledLock.wait()
+            _listenerSemaphore.wait()
             defer {
-                _cleanupCalledLock.signal()
+                _listenerSemaphore.signal()
             }
             return _cleanupCalled
         }
         set {
-            _cleanupCalledLock.wait()
+            _listenerSemaphore.wait()
             defer {
-                _cleanupCalledLock.signal()
+                _listenerSemaphore.signal()
             }
             _cleanupCalled = newValue
         }

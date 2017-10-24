@@ -25,66 +25,49 @@ public class StreamingParser: HTTPResponseWriter {
 
     /// Flag to track if the client wants to send consecutive requests on the same TCP connection
     var clientRequestedKeepAlive = false
+    
+    private let _streamingParserSemaphore = DispatchSemaphore(value: 1)
 
     /// Tracks when socket should be closed. Needs to have a lock, since it's updated often
-    private let _keepAliveUntilLock = DispatchSemaphore(value: 1)
     private var _keepAliveUntil: TimeInterval?
     public var keepAliveUntil: TimeInterval? {
         get {
-            _keepAliveUntilLock.wait()
+            _streamingParserSemaphore.wait()
             defer {
-                 _keepAliveUntilLock.signal()
+                 _streamingParserSemaphore.signal()
             }
             return _keepAliveUntil
         }
         set {
-            _keepAliveUntilLock.wait()
+            _streamingParserSemaphore.wait()
             defer {
-                _keepAliveUntilLock.signal()
+                _streamingParserSemaphore.signal()
             }
             _keepAliveUntil = newValue
         }
     }
 
     /// Socket File Descriptor so we can log it for debugging
-    private let _socketDebuggingFDLock = DispatchSemaphore(value: 1)
     private var _socketDebuggingFD: Int?
     internal var socketDebuggingFD: Int? {
         get {
-            _socketDebuggingFDLock.wait()
+            _streamingParserSemaphore.wait()
             defer {
-                _socketDebuggingFDLock.signal()
+                _streamingParserSemaphore.signal()
             }
             return _socketDebuggingFD
         }
         set {
-            _socketDebuggingFDLock.wait()
+            _streamingParserSemaphore.wait()
             defer {
-                _socketDebuggingFDLock.signal()
+                _streamingParserSemaphore.signal()
             }
             _socketDebuggingFD = newValue
         }
     }
     
-    /// Tracks when we've been told socket has been closed. Needs to have a lock, since if we get confused, bat things happen
-    private let _abortCalledLock = DispatchSemaphore(value: 1)
-    private var _abortCalled: Bool = false
-    internal var abortCalled: Bool {
-        get {
-            _abortCalledLock.wait()
-            defer {
-                _abortCalledLock.signal()
-            }
-            return _abortCalled
-        }
-        set {
-            _abortCalledLock.wait()
-            defer {
-                _abortCalledLock.signal()
-            }
-            _abortCalled = newValue
-        }
-    }
+    /// Tracks when we've been told socket has been closed.
+    internal var abortCalled: Bool = false
 
     /// Optional delegate that can tell us how many connections are in-flight.
     public weak var connectionCounter: CurrentConnectionCounting?
@@ -93,7 +76,6 @@ public class StreamingParser: HTTPResponseWriter {
     var parserBuffer: Data?
     
     /// Lock for parser buffer. TODO: Figure out how to wrap this without copying it
-    private let _parserBufferLock = DispatchSemaphore(value: 1)
 
     /// HTTP Parser
     var httpParser = http_parser()
@@ -107,20 +89,19 @@ public class StreamingParser: HTTPResponseWriter {
     public var parserConnector: ParserConnecting?
 
     ///Flag to track whether our handler has told us not to call it anymore
-    private let _shouldStopProcessingBodyLock = DispatchSemaphore(value: 1)
     private var _shouldStopProcessingBody: Bool = false
     private var shouldStopProcessingBody: Bool {
         get {
-            _shouldStopProcessingBodyLock.wait()
+            _streamingParserSemaphore.wait()
             defer {
-                _shouldStopProcessingBodyLock.signal()
+                _streamingParserSemaphore.signal()
             }
             return _shouldStopProcessingBody
         }
         set {
-            _shouldStopProcessingBodyLock.wait()
+            _streamingParserSemaphore.wait()
             defer {
-                _shouldStopProcessingBodyLock.signal()
+                _streamingParserSemaphore.signal()
             }
             _shouldStopProcessingBody = newValue
         }
@@ -236,8 +217,8 @@ public class StreamingParser: HTTPResponseWriter {
         if lastCallBack == currentCallBack {
             return false
         }
-        _parserBufferLock.wait()
-        defer { _parserBufferLock.signal() }
+        _streamingParserSemaphore.wait()
+        defer { _streamingParserSemaphore.signal() }
         switch lastCallBack {
         case .headerFieldReceived:
             if let parserBuffer = self.parserBuffer {
@@ -323,8 +304,8 @@ public class StreamingParser: HTTPResponseWriter {
     func headerFieldReceived(data: UnsafePointer<Int8>?, length: Int) -> Int32 {
         processCurrentCallback(.headerFieldReceived)
         guard let data = data else { return 0 }
-        _parserBufferLock.wait()
-        defer { _parserBufferLock.signal() }
+        _streamingParserSemaphore.wait()
+        defer { _streamingParserSemaphore.signal() }
 
         data.withMemoryRebound(to: UInt8.self, capacity: length) { (ptr) -> Void in
             if var parserBuffer = parserBuffer {
@@ -339,8 +320,8 @@ public class StreamingParser: HTTPResponseWriter {
     func headerValueReceived(data: UnsafePointer<Int8>?, length: Int) -> Int32 {
         processCurrentCallback(.headerValueReceived)
         guard let data = data else { return 0 }
-        _parserBufferLock.wait()
-        defer { _parserBufferLock.signal() }
+        _streamingParserSemaphore.wait()
+        defer { _streamingParserSemaphore.signal() }
 
         data.withMemoryRebound(to: UInt8.self, capacity: length) { (ptr) -> Void in
             if var parserBuffer = parserBuffer {
@@ -374,8 +355,8 @@ public class StreamingParser: HTTPResponseWriter {
                         //  we could get its value and pass that on to the instance variable. So instead, we're
                         //  just passing in a pointer to the internal ivar. But that ivar can't be modified in
                         //  more than one place, so we have to put a semaphore around it to prevent that.
-                        _shouldStopProcessingBodyLock.wait()
-                        handler(.chunk(data: chunk, finishedProcessing: {self._shouldStopProcessingBodyLock.signal()}), &_shouldStopProcessingBody)
+                        _streamingParserSemaphore.wait()
+                        handler(.chunk(data: chunk, finishedProcessing: {self._streamingParserSemaphore.signal()}), &_shouldStopProcessingBody)
                     case .discardBody:
                         break
                 }
@@ -387,8 +368,8 @@ public class StreamingParser: HTTPResponseWriter {
     func urlReceived(data: UnsafePointer<Int8>?, length: Int) -> Int32 {
         processCurrentCallback(.urlReceived)
         guard let data = data else { return 0 }
-        _parserBufferLock.wait()
-        defer { _parserBufferLock.signal() }
+        _streamingParserSemaphore.wait()
+        defer { _streamingParserSemaphore.signal() }
 
         data.withMemoryRebound(to: UInt8.self, capacity: length) { (ptr) -> Void in
             if var parserBuffer = parserBuffer {
@@ -537,9 +518,9 @@ public class StreamingParser: HTTPResponseWriter {
         self.parsedURL = nil
         self.parsedHeaders = HTTPHeaders()
         self.lastHeaderName = nil
-        _parserBufferLock.wait()
+        _streamingParserSemaphore.wait()
         self.parserBuffer = nil
-        _parserBufferLock.signal() 
+        _streamingParserSemaphore.signal() 
         self.parsedHTTPMethod = nil
         self.parsedHTTPVersion = nil
         self.lastCallBack = .idle
