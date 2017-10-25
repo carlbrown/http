@@ -26,7 +26,7 @@ public class StreamingParser: HTTPResponseWriter {
     /// Flag to track if the client wants to send consecutive requests on the same TCP connection
     var clientRequestedKeepAlive = false
     
-    private let _streamingParserSemaphore = DispatchSemaphore(value: 1)
+    private let _streamingParserSemaphore: DispatchSemaphore
 
     /// Tracks when socket should be closed. Needs to have a lock, since it's updated often
     private var _keepAliveUntil: TimeInterval?
@@ -120,11 +120,12 @@ public class StreamingParser: HTTPResponseWriter {
     /// Class that wraps the CHTTPParser and calls the `HTTPRequestHandler` to get the response
     ///
     /// - Parameter handler: function that is used to create the response
-    public init(handler: @escaping HTTPRequestHandler, connectionCounter: CurrentConnectionCounting? = nil, keepAliveTimeout: Double = 30.0) {
+    public init(handler: @escaping HTTPRequestHandler, connectionCounter: CurrentConnectionCounting? = nil, keepAliveTimeout: Double = 30.0, semaphore: DispatchSemaphore = DispatchSemaphore(value: 1)) {
         self.handle = handler
         self.connectionCounter = connectionCounter
         self.keepAliveTimeout = keepAliveTimeout
-
+        self._streamingParserSemaphore = semaphore
+        
         //Set up all the callbacks for the CHTTPParser library
         httpParserSettings.on_message_begin = { parser -> Int32 in
             guard let listener = StreamingParser.getSelf(parser: parser) else {

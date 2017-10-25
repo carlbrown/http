@@ -93,6 +93,9 @@ public class PoCSocketSimpleServer: CurrentConnectionCounting {
 
         var readQueues = [DispatchQueue]()
         var writeQueues = [DispatchQueue]()
+        var socketSemaphores = [DispatchSemaphore]()
+        var listenerSemaphores = [DispatchSemaphore]()
+        var parserSemaphores = [DispatchSemaphore]()
         let acceptQueue = DispatchQueue(label: "Accept Queue", qos: .default, attributes: .concurrent)
 
         let acceptSemaphore = DispatchSemaphore.init(value: acceptMax)
@@ -100,6 +103,9 @@ public class PoCSocketSimpleServer: CurrentConnectionCounting {
         for idx in 0..<queueMax {
             readQueues.append(DispatchQueue(label: "Read Queue \(idx)"))
             writeQueues.append(DispatchQueue(label: "Write Queue \(idx)"))
+            socketSemaphores.append(DispatchSemaphore(value: 1))
+            listenerSemaphores.append(DispatchSemaphore(value: 1))
+            parserSemaphores.append(DispatchSemaphore(value: 1))
         }
 
         print("Started server on port \(self.serverSocket.listeningPort) with \(self.queueMax) serial queues of each type and \(self.acceptMax) accept sockets")
@@ -115,10 +121,14 @@ public class PoCSocketSimpleServer: CurrentConnectionCounting {
                         }
                         break
                     }
-                    let streamingParser = StreamingParser(handler: handler, connectionCounter: self, keepAliveTimeout: keepAliveTimeout)
                     let readQueue = readQueues[listenerCount % self.queueMax]
                     let writeQueue = writeQueues[listenerCount % self.queueMax]
-                    let listener = PoCSocketConnectionListener(socket: clientSocket, parser: streamingParser, readQueue:readQueue, writeQueue: writeQueue, maxReadLength: maxReadLength)
+                    let socketSemaphore = socketSemaphores[listenerCount % self.queueMax]
+                    let listenerSemaphore = listenerSemaphores[listenerCount % self.queueMax]
+                    let parserSemaphore = parserSemaphores[listenerCount % self.queueMax]
+                    clientSocket._socketSemaphore = socketSemaphore
+                    let streamingParser = StreamingParser(handler: handler, connectionCounter: self, keepAliveTimeout: keepAliveTimeout, semaphore: parserSemaphore)
+                    let listener = PoCSocketConnectionListener(socket: clientSocket, parser: streamingParser, readQueue:readQueue, writeQueue: writeQueue, maxReadLength: maxReadLength, semaphore: listenerSemaphore)
                     listenerCount += 1
                     acceptSemaphore.wait()
                     acceptQueue.async { [weak listener] in

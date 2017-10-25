@@ -30,7 +30,7 @@ public class PoCSocketConnectionListener: ParserConnecting {
     private var readerSource: DispatchSourceRead?
 
     ///Flag to track whether we're in the middle of a response or not (with lock)
-    private let _listenerSemaphore = DispatchSemaphore(value: 1)
+    private let _listenerSemaphore: DispatchSemaphore
     private var _responseCompleted: Bool = false
     var responseCompleted: Bool {
         get {
@@ -96,11 +96,12 @@ public class PoCSocketConnectionListener: ParserConnecting {
     /// - Parameters:
     ///   - socket: thin PoCSocket wrapper around system calls
     ///   - parser: Manager of the CHTTPParser library
-    internal init(socket: PoCSocket, parser: StreamingParser, readQueue: DispatchQueue, writeQueue: DispatchQueue, maxReadLength: Int = 0) {
+    internal init(socket: PoCSocket, parser: StreamingParser, readQueue: DispatchQueue, writeQueue: DispatchQueue, maxReadLength: Int = 0, semaphore: DispatchSemaphore = DispatchSemaphore(value: 1)) {
         self.socket = socket
         socketFD = socket.socketfd
         socketReaderQueue = readQueue
         socketWriterQueue = writeQueue
+        self._listenerSemaphore = semaphore
         self.parser = parser
         parser.parserConnector = self
         if maxReadLength > 0 {
