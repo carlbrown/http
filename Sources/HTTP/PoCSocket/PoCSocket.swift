@@ -37,7 +37,7 @@ internal class PoCSocket {
     internal private(set) var isConnected = false
     
     /// track whether a shutdown is in progress so we can suppress error messages
-    internal var _socketSemaphore = DispatchSemaphore(value: 1)
+    internal lazy var _socketSemaphore = DispatchSemaphore(value: 1)
     private var _isShuttingDown: Bool = false
     private var isShuttingDown: Bool {
         get {
