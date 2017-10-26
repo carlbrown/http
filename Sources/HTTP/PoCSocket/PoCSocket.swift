@@ -16,6 +16,7 @@ public enum PoCSocketError: Error {
     case InvalidReadLengthError
     case InvalidWriteLengthError
     case InvalidBufferError
+    case UnknownError
 }
 
 /// Simple Wrapper around the `socket(2)` functions we need for Proof of Concept testing

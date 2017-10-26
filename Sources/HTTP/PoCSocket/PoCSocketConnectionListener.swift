@@ -28,6 +28,31 @@ public class PoCSocketConnectionListener: ParserConnecting {
 
     ///Event handler for reading from the socket
     private var readerSource: DispatchSourceRead?
+    
+    ///Event handler for writing to the socket
+    private let writerSource: DispatchSourceWrite
+    
+    private var stuffToWrite = [WriteCollection]()
+
+    ///Flag to track whether writer Source is suspended or not (with lock)
+    private let _writerSuspendedLock = DispatchSemaphore(value: 1)
+    private var _writerSuspended: Bool = true
+    var writerSuspended: Bool {
+        get {
+            _writerSuspendedLock.wait()
+            defer {
+                _writerSuspendedLock.signal()
+            }
+            return _writerSuspended
+        }
+        set {
+            _writerSuspendedLock.wait()
+            defer {
+                _writerSuspendedLock.signal()
+            }
+            _writerSuspended = newValue
+        }
+    }
 
     ///Flag to track whether we're in the middle of a response or not (with lock)
     private let _responseCompletedLock = DispatchSemaphore(value: 1)
@@ -103,6 +128,8 @@ public class PoCSocketConnectionListener: ParserConnecting {
         socketFD = socket.socketfd
         socketReaderQueue = readQueue
         socketWriterQueue = writeQueue
+        writerSource = DispatchSource.makeWriteSource(fileDescriptor: socket.socketfd, queue: socketWriterQueue)
+
         self.parser = parser
         parser.parserConnector = self
         if maxReadLength > 0 {
@@ -144,15 +171,18 @@ public class PoCSocketConnectionListener: ParserConnecting {
              */
             #if os(Linux)
                 // Call Cancel directory on Linux
+                self.writerSource.cancel()
                 self.readerSource?.cancel()
                 self.cleanup()
             #else
                 if #available(OSX 10.12, *) {
                     //Set Flag and Activate the readerSource so it can run `cancel()` for us
                     self.shouldShutdown = true
+                    self.writerSource.activate()
                     self.readerSource?.activate()
                 } else {
                     // Fallback on earlier versions
+                    self.writerSource.cancel()
                     self.readerSource?.cancel()
                     self.cleanup()
                 }
@@ -232,7 +262,7 @@ public class PoCSocketConnectionListener: ParserConnecting {
         //  event handler, which could cause a leak
         if let strongSocket = socket {
             do {
-                try strongSocket.setBlocking(mode: true)
+                try strongSocket.setBlocking(mode: false)
                 tempReaderSource = DispatchSource.makeReadSource(fileDescriptor: strongSocket.socketfd,
                                                                      queue: socketReaderQueue)
             } catch {
@@ -291,6 +321,10 @@ public class PoCSocketConnectionListener: ParserConnecting {
                     strongSelf.close()
                 }
                 if length == 0 {
+                    if (errno == EWOULDBLOCK || errno == EAGAIN) {
+                        //Nothing to do - wait for us to get triggered again
+                        return
+                    }
                     //print("ReaderSource Read count zero. Cancelling.")
                     strongSelf.readerSource?.cancel()
                 }
@@ -315,23 +349,61 @@ public class PoCSocketConnectionListener: ParserConnecting {
         }
         
         self.readerSource = tempReaderSource
+        
+        writerSource.setEventHandler { [ weak self ] in
+            guard let strongSelf = self else {
+                return
+            }
+            
+            if (strongSelf.shouldShutdown) {
+                strongSelf.writerSource.cancel()
+            }
+            
+//            if strongSelf.writerSuspended {
+//                //We're obviously not suspended now
+//                strongSelf.writerSuspended = false
+//            }
+            
+            if strongSelf.stuffToWrite.count > 0 {
+                let thingToWrite = strongSelf.stuffToWrite.removeFirst()
+                strongSelf.write(thingToWrite.data, completion: thingToWrite.completion)
+            } else {
+                strongSelf.writerSuspended = true
+                //strongSelf.writerSource.suspend()
+            }
+        }
+        
+        writerSource.setCancelHandler { [weak self] in
+            if let strongSelf = self {
+                if let readerSource = strongSelf.readerSource {
+                    if !readerSource.isCancelled {
+                        readerSource.cancel()
+                    }
+                }
+            }
+        }
+        
         self.readerSource?.resume()
+        self.writerSource.resume()
     }
-
+    
     /// Called by the parser to give us data to send back out of the socket
     ///
     /// - Parameter bytes: Data object to be queued to be written to the socket
     public func queueSocketWrite(_ bytes: Data, completion:@escaping (Result) -> Void) {
         self.socketWriterQueue.async { [weak self] in
-            self?.write(bytes)
-            completion(.ok)
+            self?.stuffToWrite.append(WriteCollection(data: bytes, completion: completion))
         }
+//        if writerSuspended {
+//            writerSuspended = false
+//            writerSource.resume()
+//        }
     }
 
     /// Write data to a socket. Should be called in an `async` block on the `socketWriterQueue`
     ///
     /// - Parameter data: data to be written
-    public func write(_ data: Data) {
+    private func write(_ data: Data, completion:@escaping (Result) -> Void) {
         do {
             var written: Int = 0
             var offset = 0
@@ -344,6 +416,13 @@ public class PoCSocketConnectionListener: ParserConnecting {
                         if result < 0 {
                             //print("Received broken write socket indication")
                             errorOccurred = true
+                        } else if result == 0 {
+                            if errno == EAGAIN || errno == EWOULDBLOCK {
+                                //Put what's left back on the front of the queue and exit
+                                //FIXME: test partially written case
+                                self.stuffToWrite.insert(WriteCollection(data:Data(),completion: completion), at: 0)
+                                return
+                            }
                         } else {
                             written += result
                         }
@@ -361,12 +440,26 @@ public class PoCSocketConnectionListener: ParserConnecting {
             }
             if errorOccurred {
                 close()
+                completion(.error(PoCSocketError.UnknownError))
                 return
             }
         } catch {
             print("Received write socket error: \(error)")
             errorOccurred = true
             close()
+            completion(.error(error))
+            return
+        }
+        completion(.ok)
+    }
+    
+    internal class WriteCollection {
+        let data: Data
+        let completion: (Result) -> Void
+        
+        init(data: Data, completion: @escaping (Result) -> Void) {
+            self.data = data
+            self.completion = completion
         }
     }
 }

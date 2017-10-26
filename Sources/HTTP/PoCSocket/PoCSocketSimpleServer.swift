@@ -80,7 +80,9 @@ public class PoCSocketSimpleServer: CurrentConnectionCounting {
         try self.serverSocket.bindAndListen(on: port)
 
         pruneSocketTimer.setEventHandler { [weak self] in
-            self?.connectionListenerList.prune()
+            if let strongSelf = self {
+                strongSelf.connectionListenerList.prune()
+            }
         }
         #if swift(>=4.0)
             pruneSocketTimer.schedule(deadline: .now() + keepAliveTimeout,
@@ -173,14 +175,26 @@ class ConnectionListenerCollection {
     /// Used when shutting down the server to close all connections
     func closeAll() {
         lock.wait()
-        storage.filter { nil != $0.value }.forEach { $0.value?.close() }
+        storage.filter {
+            nil != $0.value
+            }.forEach {
+                if let value = $0.value {
+                    value.close()
+                }
+        }
         lock.signal()
     }
 
     /// Close any idle sockets and remove any weak pointers to closed (and freed) sockets from the collection
     func prune() {
         lock.wait()
-        storage.filter { nil != $0.value }.forEach { $0.value?.closeIfIdleSocket() }
+        storage.filter {
+            nil != $0.value
+        }.forEach {
+            if let value = $0.value {
+                value.closeIfIdleSocket()
+            }
+        }
         storage = storage.filter { nil != $0.value }.filter { $0.value?.isOpen ?? false }
         lock.signal()
     }
