@@ -469,22 +469,25 @@ public class PoCSocketConnectionListener: ParserConnecting {
                                 return
                             }
                         } else {
-                            print("Socket \(strongSocket.socketfd)/\(self.socket?.uuid.uuidString ?? "N/A") write left remainder. Retrying \(offset) bytes")
+                            print("Socket \(strongSocket.socketfd)/\(self.socket?.uuid.uuidString ?? "N/A") wrote  \(result) bytes")
                             written += result
                         }
                     }
                     offset = data.count - written
                     if (offset > 0) {
                         print("Socket write left remainder. Retrying \(offset) bytes")
-                    } else {
-                        print("Socket \(strongSocket.socketfd)/\(self.socket?.uuid.uuidString ?? "N/A") wrote \(written) bytes")
                     }
                 } else {
                     print("Socket unexpectedly nil during write")
                     errorOccurred = true
                 }
                 if errorOccurred {
-                    close()
+                    if !writerSource.isCancelled {
+                        self.shouldShutdown = true
+                        socketWriterQueue.async {
+                            self.writerSource.cancel()
+                        }
+                    }
                     completion(.error(PoCSocketError.UnknownError))
                     return
                 }
