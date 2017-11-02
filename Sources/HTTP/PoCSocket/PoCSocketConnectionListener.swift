@@ -172,8 +172,10 @@ public class PoCSocketConnectionListener: ParserConnecting {
                 // Call Cancel directory on Linux
                 if !self.writerSource.isCancelled {
                     //Cancel the writer source and let it cancel the reader one
+                    print("Writer Cancel Handler called from close() on socket \(self.socket?.socketfd ?? -1)/\(self.socket?.uuid.uuidString ?? "N/A")")
                     self.writerSource.cancel()
                 } else {
+                    print("Reader Cancel Handler called from close() on socket \(self.socket?.socketfd ?? -1)/\(self.socket?.uuid.uuidString ?? "N/A")")
                     self.readerSource?.cancel()
                     self.cleanup()
                 }
@@ -370,7 +372,13 @@ public class PoCSocketConnectionListener: ParserConnecting {
         tempReaderSource.setCancelHandler { [weak self] in
             if let strongSelf = self {
                 print("Reader Cancel Handler running on socket \(strongSelf.socket?.socketfd ?? -1)/\(strongSelf.socket?.uuid.uuidString ?? "N/A")")
-                strongSelf.close() //close if we can
+                    if !strongSelf.writerSource.isCancelled {
+                        strongSelf.socketWriterQueue.async {
+                            strongSelf.writerSource.cancel()
+                        }
+                    } else {
+                        strongSelf.close()
+                    }
             }
         }
         
@@ -404,7 +412,11 @@ public class PoCSocketConnectionListener: ParserConnecting {
                 print("Writer Cancel Handler running on socket \(strongSelf.socket?.socketfd ?? -1)/\(strongSelf.socket?.uuid.uuidString ?? "N/A")")
                 if let readerSource = strongSelf.readerSource {
                     if !readerSource.isCancelled {
-                        readerSource.cancel()
+                        strongSelf.socketReaderQueue.async {
+                            readerSource.cancel()
+                        }
+                    } else {
+                        strongSelf.close()
                     }
                 }
             }
@@ -440,7 +452,7 @@ public class PoCSocketConnectionListener: ParserConnecting {
             var written: Int = 0
             var offset = 0
             
-            while written < data.count && !errorOccurred {
+            while written < data.count && !errorOccurred && !writerSource.isCancelled {
                 if let strongSocket = socket {
                     try data.withUnsafeBytes { (ptr: UnsafePointer<UInt8>) in
                         let result = try strongSocket.socketWrite(from: ptr + offset, bufSize:
