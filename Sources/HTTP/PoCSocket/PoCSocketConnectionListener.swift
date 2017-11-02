@@ -170,16 +170,12 @@ public class PoCSocketConnectionListener: ParserConnecting {
              */
             #if os(Linux)
                 // Call Cancel directory on Linux
-                self.socketReaderQueue.async {
+                if self.writerSource.isCancelled {
+                    //Cancel the writer source and let it cancel the reader one
+                    self.writerSource.cancel()
+                } else {
                     self.readerSource?.cancel()
-                    if self.writerSource.isCancelled {
-                        self.cleanup()
-                    } else {
-                        self.socketWriterQueue.async {
-                            self.writerSource.cancel()
-                            self.cleanup()
-                        }
-                    }
+                    self.cleanup()
                 }
             #else
                 if #available(OSX 10.12, *) {
@@ -368,7 +364,7 @@ public class PoCSocketConnectionListener: ParserConnecting {
         
         tempReaderSource.setCancelHandler { [weak self] in
             if let strongSelf = self {
-                print("Cancel Handler running on socket \(strongSelf.socket?.socketfd ?? -1)/\(strongSelf.socket?.uuid.uuidString ?? "N/A")")
+                print("Reader Cancel Handler running on socket \(strongSelf.socket?.socketfd ?? -1)/\(strongSelf.socket?.uuid.uuidString ?? "N/A")")
                 strongSelf.close() //close if we can
             }
         }
@@ -400,6 +396,7 @@ public class PoCSocketConnectionListener: ParserConnecting {
         
         writerSource.setCancelHandler { [weak self] in
             if let strongSelf = self {
+                print("Writer Cancel Handler running on socket \(strongSelf.socket?.socketfd ?? -1)/\(strongSelf.socket?.uuid.uuidString ?? "N/A")")
                 if let readerSource = strongSelf.readerSource {
                     if !readerSource.isCancelled {
                         readerSource.cancel()
@@ -417,6 +414,10 @@ public class PoCSocketConnectionListener: ParserConnecting {
     /// - Parameter bytes: Data object to be queued to be written to the socket
     public func queueSocketWrite(_ bytes: Data, completion:@escaping (Result) -> Void) {
         print("Queueing \(bytes.count) bytes onto socket \(self.socket?.socketfd ?? -1)/\(self.socket?.uuid.uuidString ?? "N/A"), cancelled state is \(self.readerSource?.isCancelled ?? true)")
+        if self.writerSource.isCancelled {
+            print("Cannot write to canceled socket \(self.socket?.socketfd ?? -1)/\(self.socket?.uuid.uuidString ?? "N/A")")
+            return
+        }
         self.socketWriterQueue.async { [weak self] in
             self?.stuffToWrite.append(WriteCollection(data: bytes, completion: completion))
         }
