@@ -154,9 +154,6 @@ public class PoCSocketConnectionListener: ParserConnecting {
         if !self.responseCompleted && !self.errorOccurred {
             return
         }
-        if (self.socket?.socketfd ?? -1) > 0 {
-            self.socket?.shutdownAndClose()
-        }
 
         //In a perfect world, we wouldn't have to clean this all up explicitly,
         // but KDE/heaptrack informs us we're in far from a perfect world
@@ -197,6 +194,8 @@ public class PoCSocketConnectionListener: ParserConnecting {
                     self.cleanup()
                 }
             #endif
+        } else {
+            self.cleanup()
         }
     }
 
@@ -231,6 +230,10 @@ public class PoCSocketConnectionListener: ParserConnecting {
             return
         }
         
+        if (self.socket?.socketfd ?? -1) > 0 {
+            self.socket?.shutdownAndClose()
+        }
+
         //allow for memory to be reclaimed
         if let strongReaderSource = self.readerSource {
             strongReaderSource.setEventHandler(handler: nil)
