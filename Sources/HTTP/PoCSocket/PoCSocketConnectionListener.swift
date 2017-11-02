@@ -101,8 +101,9 @@ public class PoCSocketConnectionListener: ParserConnecting {
     internal init(socket: PoCSocket, parser: StreamingParser, readQueue: DispatchQueue, writeQueue: DispatchQueue, maxReadLength: Int = 0) {
         self.socket = socket
         socketFD = socket.socketfd
-        socketReaderQueue = readQueue
-        socketWriterQueue = writeQueue
+        socketReaderQueue = DispatchQueue(label: "read queue for socket \(socketFD)", qos: .default, target: readQueue)
+        socketWriterQueue = DispatchQueue(label: "write queue for socket \(socketFD)", qos: .default, target: writeQueue)
+
         self.parser = parser
         parser.parserConnector = self
         if maxReadLength > 0 {
