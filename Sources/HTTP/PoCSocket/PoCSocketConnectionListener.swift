@@ -173,9 +173,17 @@ public class PoCSocketConnectionListener: ParserConnecting {
              */
             #if os(Linux)
                 // Call Cancel directory on Linux
-                self.writerSource.cancel()
-                self.readerSource?.cancel()
-                self.cleanup()
+                self.socketReaderQueue.async {
+                    self.readerSource?.cancel()
+                    if self.writerSource.isCancelled {
+                        self.cleanup()
+                    } else {
+                        self.socketWriterQueue.async {
+                            self.writerSource.cancel()
+                            self.cleanup()
+                        }
+                    }
+                }
             #else
                 if #available(OSX 10.12, *) {
                     //Set Flag and Activate the readerSource so it can run `cancel()` for us
