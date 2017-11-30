@@ -20,7 +20,25 @@ public class PoCSocketConnectionListener: ParserConnecting {
 
     ///Save the socket file descriptor so we can loook at it for debugging purposes
     var socketFD: Int32
-    var shouldShutdown: Bool = false
+    ///Flag to track whether we've been told to shutdown or not (with lock)
+    private let _shouldShutdownLock = DispatchSemaphore(value: 1)
+    private var _shouldShutdown: Bool = false
+    var shouldShutdown: Bool {
+        get {
+            _shouldShutdownLock.wait()
+            defer {
+                _shouldShutdownLock.signal()
+            }
+            return _shouldShutdown
+        }
+        set {
+            _shouldShutdownLock.wait()
+            defer {
+                _shouldShutdownLock.signal()
+            }
+            _shouldShutdown = newValue
+        }
+    }
 
     /// Queues for managing access to the socket without blocking the world
     let socketReaderQueue: DispatchQueue
@@ -235,6 +253,7 @@ public class PoCSocketConnectionListener: ParserConnecting {
                 try strongSocket.setBlocking(mode: true)
                 tempReaderSource = DispatchSource.makeReadSource(fileDescriptor: strongSocket.socketfd,
                                                                      queue: socketReaderQueue)
+                self.readerSource = tempReaderSource
             } catch {
                 print("Socket cannot be set to Blocking in process(): \(error)")
                 return
@@ -314,7 +333,6 @@ public class PoCSocketConnectionListener: ParserConnecting {
             }
         }
         
-        self.readerSource = tempReaderSource
         self.readerSource?.resume()
     }
 
